@@ -11,8 +11,8 @@
 #include "driver/i2s.h"
 
 // ======================== Pin configuration ========================
-#define FP_RX          16
-#define FP_TX          17
+#define FP_RX          32
+#define FP_TX          33
 #define FP_TOUCH       34
 #define FP_BAUD        57600
 #define FP_CAPACITY    100
@@ -25,8 +25,8 @@
 #define I2S_DOUT       27
 #define I2S_BCLK       26
 #define I2S_LRC        25
-#define LED_R          32
-#define LED_G          33
+#define LED_R          2
+#define LED_G          15
 #define LED_B          4
 #define CONFIG_BUTTON  14
 
