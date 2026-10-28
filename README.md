@@ -9,8 +9,8 @@
 | R558-S | TX | GPIO32 | UART RX ESP32 |
 | R558-S | RX | GPIO33 | UART TX ESP32 |
 | R558-S | TOUCH_OUT | GPIO34 | Opsional, untuk pemantauan sentuhan |
-| R558-S | VCC_3.3V | Sesuai spesifikasi modul | Periksa pinout modul |
-| R558-S | VCC_MCU | Sesuai spesifikasi modul | Ikuti datasheet varian yang digunakan |
+| R558-S | VCC_3.3V | 3.3V | Periksa pinout modul |
+| R558-S | VCC_MCU | 3.3V | Ikuti datasheet varian yang digunakan |
 | R558-S | GND | GND | Ground bersama |
 
 Baud rate sensor fingerprint: **57600**.
