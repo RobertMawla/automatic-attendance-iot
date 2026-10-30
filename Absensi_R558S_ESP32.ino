@@ -11,6 +11,9 @@ const char *DEFAULT_AP_SSID = "Absensi-ESP32";
 const char *DEFAULT_AP_PASSWORD = "absensi123";
 String apSSID = DEFAULT_AP_SSID;
 String apPassword = DEFAULT_AP_PASSWORD;
+String internetSSID = "";
+String internetPassword = "";
+uint8_t audioVolume = 80;
 Preferences wifiPrefs;
 
 // ======================== Perangkat dan status ========================

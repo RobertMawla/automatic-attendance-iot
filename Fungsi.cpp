@@ -94,11 +94,6 @@ bool sendFingerprintCommand(const uint8_t *payload, uint16_t payloadLength, bool
   uint16_t checksum = sum & 0xFFFF;
   packet[9 + payloadLength] = checksum >> 8;
   packet[10 + payloadLength] = checksum & 0xFF;
-  if (debug) {
-    Serial.print("FP TX: ");
-    for (uint16_t i = 0; i < payloadLength + 11; i++) Serial.printf("%02X ", packet[i]);
-    Serial.println();
-  }
   FingerSerial.write(packet, payloadLength + 11);
   FingerSerial.flush();
   return true;
@@ -142,7 +137,6 @@ bool readFingerprintPacket(uint8_t *out, uint16_t outCapacity, uint16_t &outLeng
     uint16_t expected = sum & 0xFFFF;
     uint16_t received = ((uint16_t)fpRxBuffer[9 + payloadLen] << 8) | fpRxBuffer[10 + payloadLen];
     if (expected != received) {
-      Serial.printf("Fingerprint checksum salah (hitung %04X, terima %04X)\n", expected, received);
       memmove(fpRxBuffer, fpRxBuffer + 1, --fpRxLength);
       continue;
     }
@@ -155,11 +149,6 @@ bool readFingerprintPacket(uint8_t *out, uint16_t outCapacity, uint16_t &outLeng
     outLength = payloadLen;
     memmove(fpRxBuffer, fpRxBuffer + total, fpRxLength - total);
     fpRxLength -= total;
-    if (debug) {
-      Serial.print("FP RX: ");
-      for (uint16_t i = 0; i < outLength; i++) Serial.printf("%02X ", out[i]);
-      Serial.println();
-    }
     return true;
   }
 }
@@ -194,19 +183,14 @@ bool verifyFingerprintSensor() {
 
   if (!fingerprintTransaction(command, sizeof(command), response,
                               sizeof(response), len, 3000)) {
-    Serial.println("R558-S readiness check: no valid UART response to TemplateNum (0x1D).");
     return false;
   }
 
   if (len < 3 || response[0] != 0x00) {
-    Serial.print("R558-S readiness check: unexpected TemplateNum response: ");
-    for (uint16_t i = 0; i < len; i++) Serial.printf("%02X ", response[i]);
-    Serial.println();
     return false;
   }
 
   uint16_t count = ((uint16_t)response[1] << 8) | response[2];
-  Serial.printf("R558-S UART OK via TemplateNum (0x1D), templates=%u\n", count);
   return true;
 }
 
@@ -586,7 +570,6 @@ bool startAudio(const char *path) {
   audioChannels = channels; audioSampleRate = sampleRate; audioBytesRemaining = dataSize;
   if (i2s_set_clk(I2S_NUM_0, audioSampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO) != ESP_OK) { audioFile.close(); return false; }
   i2s_zero_dma_buffer(I2S_NUM_0); audioPlaying = true;
-  Serial.printf("Memutar %s (%lu Hz, %u channel)\n", path, (unsigned long)audioSampleRate, audioChannels);
   return true;
 }
 
@@ -600,6 +583,16 @@ void loopAudio() {
   toRead &= ~((size_t)1);
   size_t got = audioFile.read(inputBuffer, toRead); got &= ~((size_t)1);
   if (got == 0) { audioFile.close(); audioPlaying = false; audioBytesRemaining = 0; i2s_zero_dma_buffer(I2S_NUM_0); return; }
+  // Terapkan volume digital ke sampel PCM signed 16-bit sebelum dikirim ke I2S.
+  // Volume disimpan di Preferences dan nilainya 0–100 persen.
+  for (size_t i = 0; i + 1 < got; i += 2) {
+    int16_t sample = (int16_t)((uint16_t)inputBuffer[i] | ((uint16_t)inputBuffer[i + 1] << 8));
+    int32_t scaled = ((int32_t)sample * (int32_t)audioVolume) / 100;
+    if (scaled > 32767) scaled = 32767;
+    if (scaled < -32768) scaled = -32768;
+    inputBuffer[i] = (uint8_t)(scaled & 0xFF);
+    inputBuffer[i + 1] = (uint8_t)((scaled >> 8) & 0xFF);
+  }
   size_t outputBytes = got;
   if (audioChannels == 1) {
     size_t samples = got / 2;
@@ -817,9 +810,7 @@ void processFingerprintSerial() {
     case FOP_IDENTIFY: handleIdentificationPacket(payload, len); break;
     case FOP_REMOVE_PROBE: handleRemoveProbePacket(payload, len); break;
     default:
-      Serial.print("Respons fingerprint tanpa operasi aktif: ");
-      for (uint16_t i = 0; i < len; i++) Serial.printf("%02X ", payload[i]);
-      Serial.println();
+      // Abaikan respons di luar operasi aktif agar Serial Monitor tetap ringkas.
       break;
   }
 }
@@ -873,7 +864,6 @@ void beginAutoIdentify() {
 
 void processFingerprintScheduler() {
   if (fingerOperation == FOP_IDENTIFY && millis() - identifyStartedAt > 20000UL) {
-    Serial.println("AutoIdentify timeout di sisi ESP32; mengirim Cancel 0x30.");
     const uint8_t cancelCommand[] = {0x30};
     sendFingerprintCommand(cancelCommand, sizeof(cancelCommand), false);
     fingerOperation = FOP_NONE; identifyActive = false;
@@ -907,10 +897,14 @@ void processFingerprintScheduler() {
 
 // ======================== WIFI CONFIGURATION ========================
 bool startConfigWifi() {
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(internetSSID.length() ? WIFI_AP_STA : WIFI_AP);
   delay(100);
   bool ok = WiFi.softAP(apSSID.c_str(), apPassword.c_str());
   if (ok) {
+    if (internetSSID.length()) {
+      WiFi.begin(internetSSID.c_str(), internetPassword.c_str());
+      Serial.printf("Menghubungkan Wi-Fi internet: %s\n", internetSSID.c_str());
+    }
     server.begin(); configMode = true;
     systemMessage = "Wi-Fi konfigurasi aktif. Sambungkan ke " + apSSID + " lalu buka http://192.168.4.1.";
     Serial.println(systemMessage);
